@@ -5,7 +5,7 @@
 
 ///CHANGE WHEN ADDING NEW SCALES
 int numOfScales = 6;//7-1=6 
-
+String scale_names[7] = { "G Major", "G Minor", "C Major" , "D Akebono", "D Major", "A Minor","A Akebono" };
 int scale[][8] = 
 {
 //G Major (G3, A3, B3, D4, E4, G4, A4, B4) scale [0][x]  x=0-7

@@ -29,6 +29,7 @@
 //#include <SD.h>//not using the SD library at this time
 #include <SerialFlash.h>
 #include <Bounce.h>
+#include <LiquidCrystal.h>
 
 #include "note_frequency.h"
 #include "scales.h"
@@ -41,13 +42,19 @@ int pinTouch[] = {33,32,25,17,16,15,1,0};
 int scale_index = 0;//var to keep track fo which scale is being used
 
 int dcVal = 0;//value to control the decay of each note 
-
+int dcValtmp = 0;
+float vol = 0;
+float tmpvol =0;
 //buttons for incrementing or decrementing through each scale
 Bounce button0 = Bounce(2, 15);
 Bounce button1 = Bounce(3, 15);    
 
 bool debug = 0;//Set to 1 for Serial debugging 
+bool dsp_changed = 0;
 
+
+// initialize the library with the numbers of the interface pins
+LiquidCrystal lcd(4, 5, 8, 24, 26, 27);
 ////////////////////////////////////////////////////////
 void setup() 
 {
@@ -95,7 +102,12 @@ void setup()
   sgtl5000_1.volume(0.8);
   //enable line out for troubleshooting on O-scope
   //sgtl5000_1.unmuteLineout();
-
+  lcd.begin(16, 2);
+  lcd.print("Digital Hand-Pan");
+  lcd.setCursor(0, 1);
+  lcd.print("By L.reenaers !");
+  delay(10000);
+  dsp_changed=1;
 }
 //////////////////////////////////////////////
 void loop() 
@@ -107,15 +119,32 @@ void loop()
   dcValCheck();//check the decay knob
 
   buttonCheck();//check for button presses to change the scale 
-  
+
+  dsp_check(); // check LCD display changes and apply
 }
 /////////////////////////////////////////////////////
+
+void dsp_check()
+{
+  if(dsp_changed==1){
+      lcd.setCursor(0, 0);
+      lcd.print(scale_names[scale_index]);
+      lcd.setCursor(0, 1);
+      lcd.print(String("Decay:")+ String(dcVal)+String(" Vol:")+ String(vol));
+      dsp_changed=0;
+    }
+}
 void volumeCheck()
 {
   //check knob value for volume 
   int knob = analogRead(A7);
-  float vol = (float)knob / 1280.0;
-  sgtl5000_1.volume(vol);
+  tmpvol = (float)knob / 1280.0;
+  if(tmpvol!=vol){
+      vol = tmpvol;
+      sgtl5000_1.volume(vol);
+      dsp_changed = 1;
+    }
+
   
   if(debug == 1)
   {  
@@ -123,12 +152,16 @@ void volumeCheck()
   Serial.println(knob);
   }
 }
+
 /////////////////////////////////////////////////////
 void dcValCheck()
 {
   //check knob and set value as delay on dc constant for sine wave decay
-  dcVal = map(analogRead(A6), 0, 1023, 1, 1000);
-
+  dcValtmp = map(analogRead(A6), 0, 1023, 1, 1000);
+  if(dcValtmp!=dcVal){
+    dcVal=dcValtmp;
+    dsp_changed=1;
+    }
   if(debug == 1)
   {  
   Serial.print("A6 = ");  
@@ -142,7 +175,7 @@ void touchCheck()
   //Each capacitive touch pad will vary based on the size and material it is made of
   //The value necessary to trigger each note will require some trial and error to get the
   //sensitivity just right. Try adjusting these values to get the best response. 
-    
+  
     if (touchRead(pinTouch[0]) > 2000)
     {
       //once a pad is touched, a value from the note frquency froma table is looked up via a 2D table
@@ -245,6 +278,7 @@ void buttonCheck()
   //if button 0 is pressed, increment the scale being used
   if (button0.risingEdge())
   { 
+    dsp_changed = 1;
     scale_index++;
     //check for overflow
     if(scale_index > numOfScales)//numOfScales variable found in the scales.h file
@@ -254,6 +288,7 @@ void buttonCheck()
   //if button 1 is pressed, decrement the scale being used
   if (button1.risingEdge())
   { 
+    dsp_changed = 1;
     scale_index--;
     //check for negative numbers
     if(scale_index < 0)
