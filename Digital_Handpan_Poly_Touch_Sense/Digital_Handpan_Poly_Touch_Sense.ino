@@ -26,9 +26,7 @@
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
-//#include <SD.h>//not using the SD library at this time
 #include <SerialFlash.h>
-#include <Bounce.h>
 #include <LiquidCrystal.h>
 
 #include "note_frequency.h"
@@ -39,30 +37,31 @@
 //all other touch sense pins are used by the Teensy Audio Shield (16,17,18,19)
 int pinTouch[] = {33,32,25,17,16,15,1,0};
 
-int scale_index = 0;//var to keep track fo which scale is being used
+int current_scale = 0;//var to keep track fo which scale is being used
 
 int dcVal = 0;//value to control the decay of each note 
 int dcValtmp = 0;
 float vol = 0;
 float tmpvol =0;
 //buttons for incrementing or decrementing through each scale
-Bounce button0 = Bounce(2, 15);
-Bounce button1 = Bounce(3, 15);    
+ 
 
-bool debug = 0;//Set to 1 for Serial debugging 
+bool debug = 1;//Set to 1 for Serial debugging 
 bool dsp_changed = 0;
 
+unsigned long last_pushed = 0;
+unsigned long push_delay = 2000;
+
+int buttonPin = 2;
+int buttonPin2 = 3;
 
 // initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(4, 5, 8, 24, 26, 27);
 ////////////////////////////////////////////////////////
 void setup() 
 {
-  //initialize buttons
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
-  button0.update();
-  button1.update();
+  pinMode(buttonPin, INPUT_PULLUP);
+   pinMode(buttonPin2, INPUT_PULLUP);
   
   //initialize Serial
   Serial.begin(115200);
@@ -108,6 +107,7 @@ void setup()
   lcd.print("By L.reenaers !");
   delay(10000);
   dsp_changed=1;
+  last_pushed = millis();
 }
 //////////////////////////////////////////////
 void loop() 
@@ -118,7 +118,7 @@ void loop()
 
   dcValCheck();//check the decay knob
 
-  buttonCheck();//check for button presses to change the scale 
+  assert_scale_changes();//check for button presses to change the scale 
 
   dsp_check(); // check LCD display changes and apply
 }
@@ -128,7 +128,7 @@ void dsp_check()
 {
   if(dsp_changed==1){
       lcd.setCursor(0, 0);
-      lcd.print(scale_names[scale_index]);
+      lcd.print(scale_names[current_scale]);
       lcd.setCursor(0, 1);
       lcd.print(String("Decay:")+ String(dcVal)+String(" Vol:")+ String(vol));
       dsp_changed=0;
@@ -181,7 +181,7 @@ void touchCheck()
       //once a pad is touched, a value from the note frquency froma table is looked up via a 2D table
       //with x corresponding to a scale and y corresponding to one of the eight notes on the drum. 
       
-      sine1.frequency(note_frequency[scale[scale_index][0]]);
+      sine1.frequency(note_frequency[scale[current_scale][0]]);
       dc1.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[0]) <= 2000) 
@@ -193,7 +193,7 @@ void touchCheck()
 
     if (touchRead(pinTouch[1]) > 2000) 
     {
-      sine2.frequency(note_frequency[scale[scale_index][1]]);
+      sine2.frequency(note_frequency[scale[current_scale][1]]);
       dc2.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[1]) <= 2000) 
@@ -204,7 +204,7 @@ void touchCheck()
     
     if (touchRead(pinTouch[2]) > 2000)
     {
-      sine3.frequency(note_frequency[scale[scale_index][2]]);
+      sine3.frequency(note_frequency[scale[current_scale][2]]);
       dc3.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[2]) <= 2000) 
@@ -215,7 +215,7 @@ void touchCheck()
 
     if (touchRead(pinTouch[3]) > 2000)
     {
-      sine4.frequency(note_frequency[scale[scale_index][3]]);
+      sine4.frequency(note_frequency[scale[current_scale][3]]);
       dc4.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[3]) <= 2000)
@@ -225,7 +225,7 @@ void touchCheck()
        
     if (touchRead(pinTouch[4]) > 2000) 
     {
-      sine5.frequency(note_frequency[scale[scale_index][4]]);
+      sine5.frequency(note_frequency[scale[current_scale][4]]);
       dc5.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[4]) <= 2000)
@@ -235,7 +235,7 @@ void touchCheck()
     
     if (touchRead(pinTouch[5]) > 2000)
     {
-      sine6.frequency(note_frequency[scale[scale_index][5]]);
+      sine6.frequency(note_frequency[scale[current_scale][5]]);
       dc6.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[5]) <= 2000) 
@@ -247,7 +247,7 @@ void touchCheck()
    
     if (touchRead(pinTouch[6]) > 2000)
     {
-      sine7.frequency(note_frequency[scale[scale_index][6]]);
+      sine7.frequency(note_frequency[scale[current_scale][6]]);
       dc7.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[6]) <= 2000) 
@@ -258,7 +258,7 @@ void touchCheck()
    
     if (touchRead(pinTouch[7]) > 2000) 
     {
-      sine8.frequency(note_frequency[scale[scale_index][7]]);
+      sine8.frequency(note_frequency[scale[current_scale][7]]);
       dc8.amplitude(1.0, 5);
     }
     if (touchRead(pinTouch[7]) <= 2000) 
@@ -269,35 +269,30 @@ void touchCheck()
 
   
 }
-//////////////////////////////////////////////////
-void buttonCheck()
-{
-  button0.update();
-  button1.update();
-
-  //if button 0 is pressed, increment the scale being used
-  if (button0.risingEdge())
-  { 
-    dsp_changed = 1;
-    scale_index++;
-    //check for overflow
-    if(scale_index > numOfScales)//numOfScales variable found in the scales.h file
-    scale_index = 0;
+void assert_scale_changes(){
+   int buttonValue = digitalRead(buttonPin);
+   int buttonValue2 = digitalRead(buttonPin2);
+   unsigned long elapsed = millis()-last_pushed;
+   int latest_scale = current_scale;
+   if ((buttonValue == LOW)&&(elapsed>=push_delay)){
+      if(current_scale==0){
+        current_scale=num_scale-1;
+      }else{
+        current_scale=current_scale-1;
+      }
+      last_pushed = millis();
+      
+   } else {
+      if ((buttonValue2 == LOW)&&(elapsed>=push_delay)){
+        if(current_scale==(num_scale-1)){
+          current_scale=0;
+        }else{
+          current_scale=current_scale+1;
+        }
+        last_pushed = millis();
+      }
+   }
+   if ((elapsed>=push_delay)&&(current_scale!=latest_scale)){
+      dsp_changed=1;
+    }
   }
-
-  //if button 1 is pressed, decrement the scale being used
-  if (button1.risingEdge())
-  { 
-    dsp_changed = 1;
-    scale_index--;
-    //check for negative numbers
-    if(scale_index < 0)
-    scale_index = numOfScales;//numOfScales variable found in the scales.h file
-  }
-
-  if(debug == 1)
-  {  
-  Serial.print("Scale = ");  
-  Serial.println(scale_index);
-  }
-}

@@ -4,7 +4,7 @@
 //https://hapidrum.co/hapi-drum-scale.aspx
 
 ///CHANGE WHEN ADDING NEW SCALES
-int numOfScales = 6;//7-1=6 
+int num_scale = 6;//7-1=6 
 String scale_names[7] = { "G Major", "G Minor", "C Major" , "D Akebono", "D Major", "A Minor","A Akebono" };
 int scale[][8] = 
 {

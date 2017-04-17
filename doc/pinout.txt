@@ -31,9 +31,28 @@ Teensy
 25 => Touch 6
 26 => LCD D6
 27 => LCD D7
-28
+28 ==> Touch send
 29
 30 (A19) => Opt. Pot. 2 (Reverb)
 31 (A20) => Opt. Pot. 1 (chorus)
 32 => Touch 7
 33 => Touch 8
+
+
+
+Naming convention (label)
+——————————————————--
+
+Ta x : Teensy up face pin x
+Tb x : Teensy back face pin x
+
+touch threshold :1500
+—————————
+1:
+2:
+3: +200
+4: +300
+5: +200
+6:
+7:
+8:
